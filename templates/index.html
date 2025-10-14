@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Plagiarism Checker</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 2rem;
+            background: #f5f5f5;
+        }
+        main {
+            max-width: 960px;
+            margin: 0 auto;
+            background: #fff;
+            padding: 2rem;
+            border-radius: 8px;
+            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+        }
+        h1, h2 {
+            margin-top: 0;
+        }
+        form {
+            margin-bottom: 2rem;
+        }
+        fieldset {
+            border: 1px solid #ddd;
+            padding: 1rem;
+            margin-bottom: 1rem;
+        }
+        legend {
+            font-weight: bold;
+        }
+        label {
+            display: block;
+            margin-bottom: 0.5rem;
+        }
+        input[type="text"], textarea {
+            width: 100%;
+            padding: 0.5rem;
+            border: 1px solid #bbb;
+            border-radius: 4px;
+            font-size: 1rem;
+        }
+        textarea {
+            min-height: 120px;
+        }
+        .messages {
+            margin-bottom: 1.5rem;
+            padding: 0.75rem 1rem;
+            border: 1px solid #8c8c8c;
+            border-radius: 4px;
+            background: #f0f0f0;
+        }
+        .source-list label {
+            display: flex;
+            align-items: center;
+            margin-bottom: 0.5rem;
+        }
+        .source-list input[type="checkbox"] {
+            margin-right: 0.75rem;
+        }
+        button {
+            padding: 0.6rem 1.2rem;
+            font-size: 1rem;
+            background: #0069d9;
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #0053b3;
+        }
+        .hint {
+            font-size: 0.9rem;
+            color: #666;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+        .nav-link {
+            color: #0069d9;
+            text-decoration: none;
+            border: 1px solid #0069d9;
+            padding: 0.4rem 0.8rem;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+<main>
+    <div class="header">
+        <h1>Plagiarism Checker</h1>
+        <a class="nav-link" href="{{ url_for('list_sources') }}">View Sources</a>
+    </div>
+
+    {% with messages = get_flashed_messages() %}
+        {% if messages %}
+            <div class="messages">
+                {% for message in messages %}
+                    <div>{{ message }}</div>
+                {% endfor %}
+            </div>
+        {% endif %}
+    {% endwith %}
+
+    <section>
+        <h2>Save Source Documents</h2>
+        <form method="post" action="{{ url_for('add_source') }}" enctype="multipart/form-data">
+            <fieldset>
+                <legend>Details</legend>
+                <label>
+                    Title (optional)
+                    <input type="text" name="source_title" placeholder="Source title">
+                </label>
+            </fieldset>
+            <fieldset>
+                <legend>Content</legend>
+                <label>
+                    Upload file
+                    <input type="file" name="source_file" accept=".txt,.md,.pdf,.docx,.rtf,text/plain">
+                </label>
+                <label>
+                    Or paste text
+                    <textarea name="source_text" placeholder="Paste source document text here"></textarea>
+                </label>
+                <p class="hint">Provide either a file or pasted text. If both are supplied, the uploaded file is used.</p>
+            </fieldset>
+            <button type="submit">Save Source Document</button>
+        </form>
+    </section>
+
+    <section>
+        <h2>Check Student Document</h2>
+        <form method="post" action="{{ url_for('check_submission') }}" enctype="multipart/form-data">
+            <fieldset>
+                <legend>Student Submission</legend>
+                <label>
+                    Title (optional)
+                    <input type="text" name="student_title" placeholder="Student submission title">
+                </label>
+                <label>
+                    Upload file
+                    <input type="file" name="student_file" accept=".txt,.md,.pdf,.docx,.rtf,text/plain">
+                </label>
+                <label>
+                    Or paste text
+                    <textarea name="student_text" placeholder="Paste student submission text here"></textarea>
+                </label>
+                <p class="hint">Provide either a file or pasted text. If both are supplied, the uploaded file is used.</p>
+            </fieldset>
+
+            <fieldset>
+                <legend>Select Source Documents</legend>
+                {% if source_documents %}
+                    <div class="source-list">
+                        {% for doc in source_documents %}
+                            <label>
+                                <input type="checkbox" name="source_selection" value="{{ doc.id }}">
+                                {{ doc.title }}
+                            </label>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <p class="hint">No source documents saved yet.</p>
+                {% endif %}
+            </fieldset>
+            <fieldset>
+                <legend>Detection Settings</legend>
+                <label>
+                    Sentence similarity threshold (0-1)
+                    <input type="number" name="similarity_threshold" min="0" max="1" step="0.05" value="0.3">
+                </label>
+                <p class="hint">Sentences above this cosine similarity will be highlighted in results.</p>
+            </fieldset>
+            <button type="submit">Check</button>
+        </form>
+    </section>
+</main>
+</body>
+</html>

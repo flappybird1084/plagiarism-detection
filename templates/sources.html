@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Source Documents</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 2rem;
+            background: #f5f5f5;
+        }
+        main {
+            max-width: 960px;
+            margin: 0 auto;
+            background: #fff;
+            padding: 2rem;
+            border-radius: 8px;
+            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+        }
+        a {
+            color: #0069d9;
+        }
+        .document-card {
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            background: #fafafa;
+        }
+        .document-card h3 {
+            margin-top: 0;
+        }
+        pre {
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            background: #fff;
+            border: 1px solid #e0e0e0;
+            padding: 0.75rem;
+            border-radius: 4px;
+            max-height: 240px;
+            overflow-y: auto;
+        }
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+        }
+        .nav-link {
+            text-decoration: none;
+            padding: 0.4rem 0.8rem;
+            border: 1px solid #0069d9;
+            border-radius: 4px;
+        }
+        .messages {
+            margin-bottom: 1.5rem;
+            padding: 0.75rem 1rem;
+            border: 1px solid #8c8c8c;
+            border-radius: 4px;
+            background: #f0f0f0;
+        }
+    </style>
+</head>
+<body>
+<main>
+    <header>
+        <h1>Saved Source Documents</h1>
+        <a class="nav-link" href="{{ url_for('index') }}">← Back to Checker</a>
+    </header>
+
+    {% with messages = get_flashed_messages() %}
+        {% if messages %}
+            <div class="messages">
+                {% for message in messages %}
+                    <div>{{ message }}</div>
+                {% endfor %}
+            </div>
+        {% endif %}
+    {% endwith %}
+
+    {% if source_documents %}
+        {% for document in source_documents %}
+            <article class="document-card">
+                <h3>{{ document.title }}</h3>
+                <p>Saved on {{ document.created_at.strftime("%Y-%m-%d %H:%M") }}</p>
+                <p><a href="{{ url_for('edit_source', document_id=document.id) }}">Edit document</a></p>
+                <pre>{{ document.content }}</pre>
+            </article>
+        {% endfor %}
+    {% else %}
+        <p>No source documents saved yet. Add some from the <a href="{{ url_for('index') }}">checker</a>.</p>
+    {% endif %}
+</main>
+</body>
+</html>

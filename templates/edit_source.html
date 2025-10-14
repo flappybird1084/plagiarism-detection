@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Edit Source</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 2rem;
+            background: #f5f5f5;
+        }
+        main {
+            max-width: 720px;
+            margin: 0 auto;
+            background: #fff;
+            padding: 2rem;
+            border-radius: 8px;
+            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+        }
+        form label {
+            display: block;
+            margin-bottom: 1rem;
+        }
+        input[type="text"], textarea {
+            width: 100%;
+            padding: 0.5rem;
+            border: 1px solid #bbb;
+            border-radius: 4px;
+            font-size: 1rem;
+        }
+        textarea {
+            min-height: 320px;
+        }
+        button {
+            padding: 0.6rem 1.2rem;
+            font-size: 1rem;
+            background: #0069d9;
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #0053b3;
+        }
+        .nav-link {
+            display: inline-block;
+            margin-bottom: 1rem;
+            color: #0069d9;
+            text-decoration: none;
+        }
+    </style>
+</head>
+<body>
+<main>
+    <a class="nav-link" href="{{ url_for('list_sources') }}">← Back to Sources</a>
+    <h1>Edit Source Document</h1>
+    <form method="post">
+        <label>
+            Title
+            <input type="text" name="title" value="{{ document.title }}">
+        </label>
+        <label>
+            Content
+            <textarea name="content">{{ document.content }}</textarea>
+        </label>
+        <button type="submit">Save Changes</button>
+    </form>
+</main>
+</body>
+</html>

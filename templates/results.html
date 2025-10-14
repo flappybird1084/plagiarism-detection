@@ -1,0 +1,290 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Plagiarism Results</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 2rem;
+            background: #f5f5f5;
+        }
+        main {
+            max-width: 1100px;
+            margin: 0 auto;
+            background: #fff;
+            padding: 2rem;
+            border-radius: 8px;
+            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+        }
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+        }
+        .nav-link {
+            color: #0069d9;
+            text-decoration: none;
+            border: 1px solid #0069d9;
+            padding: 0.4rem 0.8rem;
+            border-radius: 4px;
+        }
+        .scores {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+        .score-card {
+            flex: 1;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            padding: 1rem;
+            background: #fafafa;
+            text-align: center;
+        }
+        .score-card h3 {
+            margin: 0 0 0.5rem;
+            font-size: 1rem;
+            color: #444;
+        }
+        .score-value {
+            font-size: 1.8rem;
+            font-weight: bold;
+            color: #222;
+        }
+        .results-layout {
+            display: flex;
+            gap: 1.5rem;
+        }
+        .student-pane,
+        .sources-pane {
+            flex: 1;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            padding: 1rem;
+            background: #fafafa;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+        .student-pane h2,
+        .sources-pane h2 {
+            margin-top: 0;
+        }
+        pre {
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            flex: 1;
+            padding: 0.75rem;
+            border: 1px solid #e0e0e0;
+            border-radius: 4px;
+            background: #fff;
+            overflow-y: auto;
+        }
+        .student-sentences {
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            flex: 1;
+            padding: 0.75rem;
+            border: 1px solid #e0e0e0;
+            border-radius: 4px;
+            background: #fff;
+            overflow-y: auto;
+        }
+        .sentence {
+            display: block;
+            margin-bottom: 0.5rem;
+            padding: 0.25rem;
+            border-radius: 4px;
+        }
+        .sentence.highlight {
+            background: #fff3b0;
+        }
+        .source-score-card {
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            padding: 0.75rem;
+            background: #fff;
+        }
+        .source-score-card h4 {
+            margin: 0 0 0.5rem;
+        }
+        .source-score-row {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.95rem;
+            padding: 0.25rem 0;
+        }
+        .source-controls {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 1rem;
+        }
+        .source-controls button {
+            padding: 0.4rem 0.8rem;
+            border: 1px solid #0069d9;
+            background: #0069d9;
+            color: #fff;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .source-controls button:disabled {
+            background: #aac6f3;
+            border-color: #aac6f3;
+            cursor: not-allowed;
+        }
+        .source-title {
+            flex: 1;
+            text-align: center;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+<main>
+    <header>
+        <h1>Plagiarism Detection Results</h1>
+        <a class="nav-link" href="{{ url_for('index') }}">← Back to Checker</a>
+    </header>
+
+    <section class="scores">
+        <div class="score-card">
+            <h3>Token Overlap</h3>
+            <div class="score-value">{{ (scores['plagiarism_1'] * 100) | round(2) }}%</div>
+        </div>
+        <div class="score-card">
+            <h3>Sentence Similarity</h3>
+            <div class="score-value">{{ (scores['plagiarism_2'] * 100) | round(2) }}%</div>
+        </div>
+        <div class="score-card">
+            <h3>Paragraph Similarity</h3>
+            <div class="score-value">{{ (scores['plagiarism_3'] * 100) | round(2) }}%</div>
+        </div>
+    </section>
+
+    <p>Highlight threshold: {{ (threshold * 100) | round(1) }}% sentence similarity.</p>
+
+    <section class="results-layout">
+        <article class="student-pane">
+            <h2>{{ student.title }}</h2>
+            {% if student.sentences %}
+                <div id="student-content" class="student-sentences">
+                    {% for sentence in student.sentences %}
+                        <span class="sentence" data-index="{{ loop.index0 }}">{{ sentence }}</span>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <pre>{{ student.content }}</pre>
+            {% endif %}
+        </article>
+        <article class="sources-pane">
+            <div class="source-score-card">
+                <h4 id="source-score-title">Source Scores</h4>
+                <div class="source-score-row">
+                    <span>Token</span>
+                    <span id="source-token-score">0%</span>
+                </div>
+                <div class="source-score-row">
+                    <span>Sentence</span>
+                    <span id="source-sentence-score">0%</span>
+                </div>
+                <div class="source-score-row">
+                    <span>Paragraph</span>
+                    <span id="source-paragraph-score">0%</span>
+                </div>
+            </div>
+            <div class="source-controls">
+                <button id="prev-button">Prev</button>
+                <div class="source-title" id="source-title"></div>
+                <button id="next-button">Next</button>
+            </div>
+            <pre id="source-content"></pre>
+        </article>
+    </section>
+
+    <script type="application/json" id="sources-data">{{ sources | tojson }}</script>
+    <script type="application/json" id="highlight-data">{{ highlights | tojson }}</script>
+    <script type="application/json" id="similarity-threshold">{{ threshold }}</script>
+    <script>
+        const sources = JSON.parse(document.getElementById("sources-data").textContent || "[]");
+        const highlightMap = JSON.parse(document.getElementById("highlight-data").textContent || "{}");
+        const threshold = JSON.parse(document.getElementById("similarity-threshold").textContent || "0.6");
+        const titleEl = document.getElementById("source-title");
+        const contentEl = document.getElementById("source-content");
+        const prevButton = document.getElementById("prev-button");
+        const nextButton = document.getElementById("next-button");
+        const scoreTitleEl = document.getElementById("source-score-title");
+        const tokenScoreEl = document.getElementById("source-token-score");
+        const sentenceScoreEl = document.getElementById("source-sentence-score");
+        const paragraphScoreEl = document.getElementById("source-paragraph-score");
+        const sentenceEls = Array.from(document.querySelectorAll(".sentence"));
+
+        let index = 0;
+
+        function applyHighlights(sourceId) {
+            if (!sentenceEls.length) {
+                return;
+            }
+
+            const scores = highlightMap[String(sourceId)] || [];
+            sentenceEls.forEach((el, idx) => {
+                const score = scores[idx] || 0;
+                if (score >= threshold) {
+                    el.classList.add("highlight");
+                } else {
+                    el.classList.remove("highlight");
+                }
+                el.dataset.score = score.toFixed(3);
+            });
+        }
+
+        function updateView() {
+            if (!sources.length) {
+                titleEl.textContent = "No sources selected";
+                contentEl.textContent = "";
+                prevButton.disabled = true;
+                nextButton.disabled = true;
+                scoreTitleEl.textContent = "No source";
+                tokenScoreEl.textContent = "0%";
+                sentenceScoreEl.textContent = "0%";
+                paragraphScoreEl.textContent = "0%";
+                return;
+            }
+
+            const current = sources[index];
+            titleEl.textContent = current.title;
+            contentEl.textContent = current.content;
+
+            const score = current.scores || {};
+            scoreTitleEl.textContent = `Scores: ${current.title}`;
+            tokenScoreEl.textContent = `${((score.token || 0) * 100).toFixed(1)}%`;
+            sentenceScoreEl.textContent = `${((score.sentence || 0) * 100).toFixed(1)}%`;
+            paragraphScoreEl.textContent = `${((score.paragraph || 0) * 100).toFixed(1)}%`;
+
+            prevButton.disabled = index === 0;
+            nextButton.disabled = index === sources.length - 1;
+            applyHighlights(current.id);
+        }
+
+        prevButton.addEventListener("click", () => {
+            if (index > 0) {
+                index -= 1;
+                updateView();
+            }
+        });
+
+        nextButton.addEventListener("click", () => {
+            if (index < sources.length - 1) {
+                index += 1;
+                updateView();
+            }
+        });
+
+        updateView();
+    </script>
+</main>
+</body>
+</html>

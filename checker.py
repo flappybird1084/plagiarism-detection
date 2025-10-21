@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import re
 from itertools import chain
-from typing import Iterable, List
+from typing import Iterable, List, Optional
 
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
+
+from ollama_embeddings import OllamaEmbedder, OllamaEmbeddingError
 
 
 class Checked:
@@ -15,19 +17,29 @@ class Checked:
     paragraph_splitter = re.compile(r"\n\s*\n+")
     token_pattern = re.compile(r"\b\w+\b", re.UNICODE)
 
+    def __init__(self, embedder: Optional[OllamaEmbedder] = None) -> None:
+        self.embedder = embedder or OllamaEmbedder()
+        self._embeddings_disabled = False
+
     def analyze(self, student_content: str, source_contents: List[str]) -> dict:
+        zero_scores = {
+            "token_overlap": 0.0,
+            "sentence_similarity_tfidf": 0.0,
+            "sentence_similarity_embedding": 0.0,
+            "paragraph_similarity_tfidf": 0.0,
+            "paragraph_similarity_embedding": 0.0,
+        }
+
         if not source_contents:
-            return {
-                "plagiarism_1": 0.0,
-                "plagiarism_2": 0.0,
-                "plagiarism_3": 0.0,
-            }
+            return zero_scores
 
         aggregate = self._aggregate_scores(student_content, source_contents)
         return {
-            "plagiarism_1": aggregate["token"],
-            "plagiarism_2": aggregate["sentence"],
-            "plagiarism_3": aggregate["paragraph"],
+            "token_overlap": aggregate["token"],
+            "sentence_similarity_tfidf": aggregate["sentence_tfidf"],
+            "sentence_similarity_embedding": aggregate["sentence_embedding"],
+            "paragraph_similarity_tfidf": aggregate["paragraph_tfidf"],
+            "paragraph_similarity_embedding": aggregate["paragraph_embedding"],
         }
 
     def per_source_scores(self, student_content: str, source_contents: List[str]) -> List[dict]:
@@ -36,18 +48,22 @@ class Checked:
         student_paragraphs = self._split_paragraphs(student_content)
 
         for source in source_contents:
+            source_sentences = self._split_sentences(source)
+            source_paragraphs = self._split_paragraphs(source)
             token_score = self._basic_similarity(student_content, [source])
-            sentence_score = self._tfidf_similarity(
-                student_sentences, self._split_sentences(source)
-            )
-            paragraph_score = self._tfidf_similarity(
-                student_paragraphs, self._split_paragraphs(source)
+            sentence_tfidf = self._tfidf_similarity(student_sentences, source_sentences)
+            sentence_embedding = self._embedding_similarity(student_sentences, source_sentences)
+            paragraph_tfidf = self._tfidf_similarity(student_paragraphs, source_paragraphs)
+            paragraph_embedding = self._embedding_similarity(
+                student_paragraphs, source_paragraphs
             )
             per_source.append(
                 {
-                    "token": token_score,
-                    "sentence": sentence_score,
-                    "paragraph": paragraph_score,
+                    "token_overlap": token_score,
+                    "sentence_similarity_tfidf": sentence_tfidf,
+                    "sentence_similarity_embedding": sentence_embedding,
+                    "paragraph_similarity_tfidf": paragraph_tfidf,
+                    "paragraph_similarity_embedding": paragraph_embedding,
                 }
             )
         return per_source
@@ -64,8 +80,12 @@ class Checked:
 
         return {
             "token": self._basic_similarity(student_content, source_contents),
-            "sentence": self._tfidf_similarity(student_sentences, source_sentences),
-            "paragraph": self._tfidf_similarity(student_paragraphs, source_paragraphs),
+            "sentence_tfidf": self._tfidf_similarity(student_sentences, source_sentences),
+            "sentence_embedding": self._embedding_similarity(student_sentences, source_sentences),
+            "paragraph_tfidf": self._tfidf_similarity(student_paragraphs, source_paragraphs),
+            "paragraph_embedding": self._embedding_similarity(
+                student_paragraphs, source_paragraphs
+            ),
         }
 
     def sentence_similarities(
@@ -126,6 +146,31 @@ class Checked:
             return 0.0
 
         similarities = cosine_similarity(student_matrix, source_matrix)
+        if similarities.size == 0:
+            return 0.0
+        max_per_student = similarities.max(axis=1)
+        return float(max_per_student.mean())
+
+    def _embedding_similarity(self, student_parts: List[str], source_parts: List[str]) -> float:
+        if self._embeddings_disabled:
+            return 0.0
+
+        student_parts = self._normalize_parts(student_parts)
+        source_parts = self._normalize_parts(source_parts)
+        if not student_parts or not source_parts:
+            return 0.0
+
+        try:
+            student_vectors = self.embedder.embed_batch(student_parts)
+            source_vectors = self.embedder.embed_batch(source_parts)
+        except OllamaEmbeddingError:
+            self._embeddings_disabled = True
+            return 0.0
+
+        if not student_vectors or not source_vectors:
+            return 0.0
+
+        similarities = cosine_similarity(student_vectors, source_vectors)
         if similarities.size == 0:
             return 0.0
         max_per_student = similarities.max(axis=1)

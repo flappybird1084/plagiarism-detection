@@ -153,15 +153,23 @@
     <section class="scores">
         <div class="score-card">
             <h3>Token Overlap</h3>
-            <div class="score-value">{{ (scores['plagiarism_1'] * 100) | round(2) }}%</div>
+            <div class="score-value">{{ (scores['token_overlap'] * 100) | round(2) }}%</div>
         </div>
         <div class="score-card">
-            <h3>Sentence Similarity</h3>
-            <div class="score-value">{{ (scores['plagiarism_2'] * 100) | round(2) }}%</div>
+            <h3>Sentence Similarity (TF-IDF)</h3>
+            <div class="score-value">{{ (scores['sentence_similarity_tfidf'] * 100) | round(2) }}%</div>
         </div>
         <div class="score-card">
-            <h3>Paragraph Similarity</h3>
-            <div class="score-value">{{ (scores['plagiarism_3'] * 100) | round(2) }}%</div>
+            <h3>Sentence Similarity (Embeddings)</h3>
+            <div class="score-value">{{ (scores['sentence_similarity_embedding'] * 100) | round(2) }}%</div>
+        </div>
+        <div class="score-card">
+            <h3>Paragraph Similarity (TF-IDF)</h3>
+            <div class="score-value">{{ (scores['paragraph_similarity_tfidf'] * 100) | round(2) }}%</div>
+        </div>
+        <div class="score-card">
+            <h3>Paragraph Similarity (Embeddings)</h3>
+            <div class="score-value">{{ (scores['paragraph_similarity_embedding'] * 100) | round(2) }}%</div>
         </div>
     </section>
 
@@ -188,12 +196,20 @@
                     <span id="source-token-score">0%</span>
                 </div>
                 <div class="source-score-row">
-                    <span>Sentence</span>
-                    <span id="source-sentence-score">0%</span>
+                    <span>Sentence (TF-IDF)</span>
+                    <span id="source-sentence-tfidf-score">0%</span>
                 </div>
                 <div class="source-score-row">
-                    <span>Paragraph</span>
-                    <span id="source-paragraph-score">0%</span>
+                    <span>Sentence (Embeddings)</span>
+                    <span id="source-sentence-embedding-score">0%</span>
+                </div>
+                <div class="source-score-row">
+                    <span>Paragraph (TF-IDF)</span>
+                    <span id="source-paragraph-tfidf-score">0%</span>
+                </div>
+                <div class="source-score-row">
+                    <span>Paragraph (Embeddings)</span>
+                    <span id="source-paragraph-embedding-score">0%</span>
                 </div>
             </div>
             <div class="source-controls">
@@ -218,8 +234,10 @@
         const nextButton = document.getElementById("next-button");
         const scoreTitleEl = document.getElementById("source-score-title");
         const tokenScoreEl = document.getElementById("source-token-score");
-        const sentenceScoreEl = document.getElementById("source-sentence-score");
-        const paragraphScoreEl = document.getElementById("source-paragraph-score");
+        const sentenceTfidfScoreEl = document.getElementById("source-sentence-tfidf-score");
+        const sentenceEmbeddingScoreEl = document.getElementById("source-sentence-embedding-score");
+        const paragraphTfidfScoreEl = document.getElementById("source-paragraph-tfidf-score");
+        const paragraphEmbeddingScoreEl = document.getElementById("source-paragraph-embedding-score");
         const sentenceEls = Array.from(document.querySelectorAll(".sentence"));
 
         let index = 0;
@@ -249,8 +267,10 @@
                 nextButton.disabled = true;
                 scoreTitleEl.textContent = "No source";
                 tokenScoreEl.textContent = "0%";
-                sentenceScoreEl.textContent = "0%";
-                paragraphScoreEl.textContent = "0%";
+                sentenceTfidfScoreEl.textContent = "0%";
+                sentenceEmbeddingScoreEl.textContent = "0%";
+                paragraphTfidfScoreEl.textContent = "0%";
+                paragraphEmbeddingScoreEl.textContent = "0%";
                 return;
             }
 
@@ -260,9 +280,11 @@
 
             const score = current.scores || {};
             scoreTitleEl.textContent = `Scores: ${current.title}`;
-            tokenScoreEl.textContent = `${((score.token || 0) * 100).toFixed(1)}%`;
-            sentenceScoreEl.textContent = `${((score.sentence || 0) * 100).toFixed(1)}%`;
-            paragraphScoreEl.textContent = `${((score.paragraph || 0) * 100).toFixed(1)}%`;
+            tokenScoreEl.textContent = `${((score.token_overlap || 0) * 100).toFixed(1)}%`;
+            sentenceTfidfScoreEl.textContent = `${((score.sentence_similarity_tfidf || 0) * 100).toFixed(1)}%`;
+            sentenceEmbeddingScoreEl.textContent = `${((score.sentence_similarity_embedding || 0) * 100).toFixed(1)}%`;
+            paragraphTfidfScoreEl.textContent = `${((score.paragraph_similarity_tfidf || 0) * 100).toFixed(1)}%`;
+            paragraphEmbeddingScoreEl.textContent = `${((score.paragraph_similarity_embedding || 0) * 100).toFixed(1)}%`;
 
             prevButton.disabled = index === 0;
             nextButton.disabled = index === sources.length - 1;

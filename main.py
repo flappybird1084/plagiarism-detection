@@ -6,6 +6,10 @@ from typing import Iterable, List
 
 from flask import abort, flash, redirect, render_template, request, url_for, Flask
 from flask_sqlalchemy import SQLAlchemy
+from html.parser import HTMLParser
+from urllib.parse import urlparse
+
+import requests
 
 from checker import checked
 
@@ -52,6 +56,118 @@ def _fetch_selected_sources(selected_ids: Iterable[int]) -> List[Document]:
     )
 
 
+class _HTMLTextExtractor(HTMLParser):
+    """Extract readable text and title from an HTML document."""
+
+    _block_elements = {
+        "p",
+        "div",
+        "section",
+        "article",
+        "header",
+        "footer",
+        "li",
+        "ul",
+        "ol",
+        "br",
+        "h1",
+        "h2",
+        "h3",
+        "h4",
+        "h5",
+        "h6",
+    }
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._parts: List[str] = []
+        self._title_parts: List[str] = []
+        self._skip_depth = 0
+        self._collecting_title = False
+
+    def handle_starttag(self, tag: str, attrs) -> None:
+        lowered = tag.lower()
+        if lowered in {"script", "style"}:
+            self._skip_depth += 1
+            return
+        if lowered == "title":
+            self._collecting_title = True
+            return
+        if lowered in self._block_elements:
+            self._parts.append("\n")
+
+    def handle_endtag(self, tag: str) -> None:
+        lowered = tag.lower()
+        if lowered in {"script", "style"} and self._skip_depth > 0:
+            self._skip_depth -= 1
+            return
+        if lowered == "title":
+            self._collecting_title = False
+            return
+        if lowered in self._block_elements:
+            self._parts.append("\n")
+
+    def handle_data(self, data: str) -> None:
+        if self._skip_depth > 0:
+            return
+        cleaned = data.strip()
+        if not cleaned:
+            return
+        if self._collecting_title:
+            self._title_parts.append(cleaned)
+        else:
+            self._parts.append(cleaned + " ")
+
+    @property
+    def title_text(self) -> str | None:
+        title = " ".join(self._title_parts).strip()
+        return title or None
+
+    def get_text(self) -> str:
+        text = "".join(self._parts)
+        lines = [line.strip() for line in text.splitlines()]
+        return "\n".join(line for line in lines if line)
+
+
+def _normalize_url(raw_url: str) -> str:
+    parsed = urlparse(raw_url)
+    if not parsed.scheme:
+        raw_url = f"https://{raw_url}"
+        parsed = urlparse(raw_url)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        raise ValueError("Provide a valid http or https URL.")
+    return raw_url
+
+
+def _fetch_url_content(url: str) -> tuple[str, str | None]:
+    try:
+        response = requests.get(url, timeout=10)
+    except requests.RequestException as exc:
+        raise ValueError(f"Unable to fetch URL: {exc}") from exc
+
+    if response.status_code != 200:
+        raise ValueError(f"URL returned status code {response.status_code}.")
+
+    content_type = response.headers.get("Content-Type", "")
+    text_payload = response.text
+    if "text/html" in content_type.lower() or "<html" in text_payload[:200].lower():
+        extractor = _HTMLTextExtractor()
+        extractor.feed(text_payload)
+        extractor.close()
+        extracted_text = extractor.get_text().strip()
+        if not extracted_text:
+            raise ValueError("Fetched page does not contain readable text.")
+        return extracted_text, extractor.title_text or response.url
+
+    if content_type and not content_type.lower().startswith("text/"):
+        raise ValueError("Only text and HTML content can be saved from URLs.")
+
+    stripped = text_payload.strip()
+    if not stripped:
+        raise ValueError("Fetched page did not contain any text.")
+    return stripped, response.url
+
+
 @app.route("/", methods=["GET"])
 def index():
     sources = (
@@ -95,14 +211,41 @@ def edit_source(document_id: int):
     return render_template("edit_source.html", document=document)
 
 
+@app.route("/sources/<int:document_id>/delete", methods=["POST"])
+def delete_source(document_id: int):
+    document = Document.query.filter_by(id=document_id, is_source=True).first()
+    if document is None:
+        flash("Source document not found.")
+        return redirect(url_for("list_sources"))
+
+    db.session.delete(document)
+    db.session.commit()
+    flash(f"Deleted source document '{document.title}'.")
+    return redirect(url_for("list_sources"))
+
+
 @app.route("/add-source", methods=["POST"])
 def add_source():
     title = request.form.get("source_title", "").strip()
     typed_text = request.form.get("source_text", "").strip()
     upload = request.files.get("source_file")
+    source_url_input = request.form.get("source_url", "").strip()
+    normalized_url = ""
+    url_inferred_title: str | None = None
 
     content = ""
-    if upload and upload.filename:
+    if source_url_input:
+        try:
+            normalized_url = _normalize_url(source_url_input)
+        except ValueError as exc:
+            flash(str(exc))
+            return redirect(url_for("index"))
+        try:
+            content, url_inferred_title = _fetch_url_content(normalized_url)
+        except ValueError as exc:
+            flash(str(exc))
+            return redirect(url_for("index"))
+    elif upload and upload.filename:
         content = _decode_upload(upload)
         if not title:
             title = Path(upload.filename).name
@@ -110,10 +253,10 @@ def add_source():
         content = typed_text
 
     if not content:
-        flash("Provide a file or typed text to add a source document.")
+        flash("Provide a URL, file, or typed text to add a source document.")
         return redirect(url_for("index"))
 
-    resolved_title = title or "Unnamed Source"
+    resolved_title = title or url_inferred_title or normalized_url or "Unnamed Source"
     db.session.add(
         Document(title=resolved_title, content=content, is_source=True)
     )

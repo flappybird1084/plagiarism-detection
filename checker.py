@@ -19,7 +19,6 @@ class Checked:
 
     def __init__(self, embedder: Optional[OllamaEmbedder] = None) -> None:
         self.embedder = embedder or OllamaEmbedder()
-        self._embeddings_disabled = False
 
     def analyze(self, student_content: str, source_contents: List[str]) -> dict:
         zero_scores = {
@@ -74,18 +73,23 @@ class Checked:
             chain.from_iterable(self._split_sentences(text) for text in source_contents)
         )
         student_paragraphs = self._split_paragraphs(student_content)
-        source_paragraphs = list(
-            chain.from_iterable(self._split_paragraphs(text) for text in source_contents)
-        )
+        paragraph_tfidf_scores: List[float] = []
+        paragraph_embedding_scores: List[float] = []
+        for source_text in source_contents:
+            source_paragraphs = self._split_paragraphs(source_text)
+            paragraph_tfidf_scores.append(
+                self._tfidf_similarity(student_paragraphs, source_paragraphs)
+            )
+            paragraph_embedding_scores.append(
+                self._embedding_similarity(student_paragraphs, source_paragraphs)
+            )
 
         return {
             "token": self._basic_similarity(student_content, source_contents),
             "sentence_tfidf": self._tfidf_similarity(student_sentences, source_sentences),
             "sentence_embedding": self._embedding_similarity(student_sentences, source_sentences),
-            "paragraph_tfidf": self._tfidf_similarity(student_paragraphs, source_paragraphs),
-            "paragraph_embedding": self._embedding_similarity(
-                student_paragraphs, source_paragraphs
-            ),
+            "paragraph_tfidf": self._average_non_zero(paragraph_tfidf_scores),
+            "paragraph_embedding": self._average_non_zero(paragraph_embedding_scores),
         }
 
     def sentence_similarities(
@@ -152,9 +156,6 @@ class Checked:
         return float(max_per_student.mean())
 
     def _embedding_similarity(self, student_parts: List[str], source_parts: List[str]) -> float:
-        if self._embeddings_disabled:
-            return 0.0
-
         student_parts = self._normalize_parts(student_parts)
         source_parts = self._normalize_parts(source_parts)
         if not student_parts or not source_parts:
@@ -164,7 +165,6 @@ class Checked:
             student_vectors = self.embedder.embed_batch(student_parts)
             source_vectors = self.embedder.embed_batch(source_parts)
         except OllamaEmbeddingError:
-            self._embeddings_disabled = True
             return 0.0
 
         if not student_vectors or not source_vectors:
@@ -194,6 +194,12 @@ class Checked:
 
     def split_sentences(self, text: str) -> List[str]:
         return self._normalize_parts(self._split_sentences(text))
+
+    def _average_non_zero(self, values: Iterable[float]) -> float:
+        filtered = [value for value in values if value]
+        if not filtered:
+            return 0.0
+        return float(sum(filtered) / len(filtered))
 
 
 checked = Checked()

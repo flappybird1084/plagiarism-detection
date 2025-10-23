@@ -122,6 +122,11 @@
             <fieldset>
                 <legend>Content</legend>
                 <label>
+                    Fetch from URL
+                    <input type="url" name="source_url" placeholder="https://example.com/article">
+                </label>
+                <p class="hint">If a URL is provided, the page content is used instead of any uploaded file or pasted text.</p>
+                <label>
                     Upload file
                     <input type="file" name="source_file" accept=".txt,.md,.pdf,.docx,.rtf,text/plain">
                 </label>
@@ -129,7 +134,7 @@
                     Or paste text
                     <textarea name="source_text" placeholder="Paste source document text here"></textarea>
                 </label>
-                <p class="hint">Provide either a file or pasted text. If both are supplied, the uploaded file is used.</p>
+                <p class="hint">When no URL is supplied, provide either a file or pasted text. If both are supplied, the uploaded file is used.</p>
             </fieldset>
             <button type="submit">Save Source Document</button>
         </form>

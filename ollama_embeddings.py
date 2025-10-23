@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from typing import Iterable, List, Sequence
+from typing import Iterable, List, Optional, Sequence
 
 import requests
 
@@ -25,33 +25,52 @@ class OllamaEmbedder:
 
     def embed_batch(self, texts: Sequence[str]) -> List[List[float]]:
         embeddings: List[List[float]] = []
+        endpoint = f"{self.base_url.rstrip('/')}/api/embeddings"
         for text in texts:
             payload = {"model": self.model, "prompt": text}
             try:
-                response = requests.post(
-                    f"{self.base_url.rstrip('/')}/api/embeddings",
+                with requests.post(
+                    endpoint,
                     data=json.dumps(payload),
                     headers={"Content-Type": "application/json"},
                     timeout=self.timeout,
-                )
+                    stream=True,
+                ) as response:
+                    if response.status_code != 200:
+                        body = response.text
+                        raise OllamaEmbeddingError(
+                            f"Ollama embedding request returned {response.status_code}: {body}"
+                        )
+
+                    embedding: Optional[List[float]] = None
+                    for line in response.iter_lines(decode_unicode=True):
+                        if not line:
+                            continue
+
+                        try:
+                            chunk = json.loads(line)
+                        except ValueError:
+                            continue
+
+                        if chunk.get("error"):
+                            raise OllamaEmbeddingError(
+                                f"Ollama embedding request error: {chunk['error']}"
+                            )
+
+                        current = chunk.get("embedding")
+                        if isinstance(current, list):
+                            embedding = current
+
+                        if chunk.get("done", True) and embedding is not None:
+                            break
+
+                    if embedding is None:
+                        raise OllamaEmbeddingError("Embedding payload missing 'embedding' list")
+
             except requests.RequestException as exc:
                 raise OllamaEmbeddingError(
                     f"Ollama embedding request failed: {exc}"
                 ) from exc
-
-            if response.status_code != 200:
-                raise OllamaEmbeddingError(
-                    f"Ollama embedding request returned {response.status_code}: {response.text}"
-                )
-
-            try:
-                data = response.json()
-            except ValueError as exc:
-                raise OllamaEmbeddingError("Invalid JSON from Ollama embeddings API") from exc
-
-            embedding = data.get("embedding")
-            if not isinstance(embedding, list):
-                raise OllamaEmbeddingError("Embedding payload missing 'embedding' list")
 
             embeddings.append(embedding)
         return embeddings
@@ -59,4 +78,3 @@ class OllamaEmbedder:
     def embed_iter(self, texts: Iterable[str]) -> Iterable[List[float]]:
         for text in texts:
             yield self.embed(text)
-

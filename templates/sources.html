@@ -60,6 +60,26 @@
             border-radius: 4px;
             background: #f0f0f0;
         }
+        .document-actions {
+            display: flex;
+            gap: 0.75rem;
+            align-items: center;
+            margin: 0.5rem 0 1rem;
+        }
+        .document-actions form {
+            margin: 0;
+        }
+        .delete-button {
+            background: #d9534f;
+            color: #fff;
+            border: 1px solid #d43f3a;
+            padding: 0.4rem 0.8rem;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .delete-button:hover {
+            background: #c9302c;
+        }
     </style>
 </head>
 <body>
@@ -84,7 +104,12 @@
             <article class="document-card">
                 <h3>{{ document.title }}</h3>
                 <p>Saved on {{ document.created_at.strftime("%Y-%m-%d %H:%M") }}</p>
-                <p><a href="{{ url_for('edit_source', document_id=document.id) }}">Edit document</a></p>
+                <div class="document-actions">
+                    <a href="{{ url_for('edit_source', document_id=document.id) }}">Edit document</a>
+                    <form action="{{ url_for('delete_source', document_id=document.id) }}" method="post" onsubmit="return confirm({{ ('Delete ' ~ document.title ~ '?')|tojson }});">
+                        <button type="submit" class="delete-button">Delete</button>
+                    </form>
+                </div>
                 <pre>{{ document.content }}</pre>
             </article>
         {% endfor %}

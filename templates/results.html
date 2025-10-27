@@ -141,6 +141,18 @@
             text-align: center;
             font-weight: bold;
         }
+        .score-alerts {
+            margin-top: 0.75rem;
+        }
+        .score-alert {
+            margin-top: 0.5rem;
+            padding: 0.5rem 0.75rem;
+            border-radius: 4px;
+            background: #ffe2e0;
+            color: #8a1f11;
+            font-size: 0.85rem;
+            border: 1px solid #f5a8a3;
+        }
     </style>
 </head>
 <body>
@@ -217,6 +229,7 @@
                 <div class="source-title" id="source-title"></div>
                 <button id="next-button">Next</button>
             </div>
+            <div class="score-alerts" id="score-alerts"></div>
             <pre id="source-content"></pre>
         </article>
     </section>
@@ -239,6 +252,7 @@
         const paragraphTfidfScoreEl = document.getElementById("source-paragraph-tfidf-score");
         const paragraphEmbeddingScoreEl = document.getElementById("source-paragraph-embedding-score");
         const sentenceEls = Array.from(document.querySelectorAll(".sentence"));
+        const scoreAlertsEl = document.getElementById("score-alerts");
 
         let index = 0;
 
@@ -271,6 +285,7 @@
                 sentenceEmbeddingScoreEl.textContent = "0%";
                 paragraphTfidfScoreEl.textContent = "0%";
                 paragraphEmbeddingScoreEl.textContent = "0%";
+                scoreAlertsEl.innerHTML = "";
                 return;
             }
 
@@ -285,6 +300,25 @@
             sentenceEmbeddingScoreEl.textContent = `${((score.sentence_similarity_embedding || 0) * 100).toFixed(1)}%`;
             paragraphTfidfScoreEl.textContent = `${((score.paragraph_similarity_tfidf || 0) * 100).toFixed(1)}%`;
             paragraphEmbeddingScoreEl.textContent = `${((score.paragraph_similarity_embedding || 0) * 100).toFixed(1)}%`;
+
+            const alertMap = [
+                { key: "token_overlap", label: "Token overlap score" },
+                { key: "sentence_similarity_tfidf", label: "Sentence (TF-IDF) score" },
+                { key: "sentence_similarity_embedding", label: "Sentence (Embeddings) score" },
+                { key: "paragraph_similarity_tfidf", label: "Paragraph (TF-IDF) score" },
+                { key: "paragraph_similarity_embedding", label: "Paragraph (Embeddings) score" },
+            ];
+            const messages = alertMap
+                .filter(({ key }) => (score[key] || 0) === 0)
+                .map(({ label }) => `${label} may not be accurate, typically because the document is large`);
+
+            if (messages.length) {
+                scoreAlertsEl.innerHTML = messages
+                    .map((msg) => `<div class="score-alert">${msg}</div>`)
+                    .join("");
+            } else {
+                scoreAlertsEl.innerHTML = "";
+            }
 
             prevButton.disabled = index === 0;
             nextButton.disabled = index === sources.length - 1;

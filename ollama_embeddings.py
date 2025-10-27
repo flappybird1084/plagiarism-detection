@@ -17,7 +17,7 @@ class OllamaEmbedder:
 
     model: str = "nomic-embed-text"
     base_url: str = "http://localhost:11434"
-    timeout: float = 30.0
+    timeout: float = 90.0
 
     def embed(self, text: str) -> List[float]:
         vectors = self.embed_batch([text])

@@ -61,6 +61,38 @@
         .source-list input[type="checkbox"] {
             margin-right: 0.75rem;
         }
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+            margin-bottom: 1rem;
+        }
+        .source-controls {
+            display: flex;
+            justify-content: flex-end;
+            margin-bottom: 0.75rem;
+        }
+        .select-all-button {
+            padding: 0.4rem 0.8rem;
+            font-size: 0.9rem;
+            background: #f0f7ff;
+            color: #0069d9;
+            border: 1px solid #b8d7ff;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .select-all-button:hover {
+            background: #e0efff;
+        }
+        .ai-generate-button {
+            background: #0cb35f;
+            border-radius: 4px;
+        }
+        .ai-generate-button:hover {
+            background: #0a8c4b;
+        }
         button {
             padding: 0.6rem 1.2rem;
             font-size: 1rem;
@@ -72,6 +104,100 @@
         }
         button:hover {
             background: #0053b3;
+        }
+        .secondary-button {
+            background: #f2f2f2;
+            color: #333;
+            border: 1px solid #bbb;
+        }
+        .secondary-button:hover {
+            background: #e2e2e2;
+        }
+        .submit-controls {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            flex-wrap: wrap;
+        }
+        .spinner {
+            width: 18px;
+            height: 18px;
+            border: 3px solid rgba(0, 105, 217, 0.25);
+            border-top-color: #0069d9;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+        .processing-bubble {
+            padding: 0.5rem 0.75rem;
+            background: #f0f7ff;
+            color: #004a99;
+            border: 1px solid #b8d7ff;
+            border-radius: 999px;
+            font-size: 0.85rem;
+        }
+        .hidden {
+            display: none !important;
+        }
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.45);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+            z-index: 1000;
+        }
+        .modal {
+            background: #fff;
+            border-radius: 8px;
+            padding: 1.5rem;
+            max-width: 420px;
+            width: 100%;
+            position: relative;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+        }
+        .modal h3 {
+            margin-top: 0;
+            margin-bottom: 0.5rem;
+        }
+        .modal-close {
+            position: absolute;
+            top: 0.5rem;
+            right: 0.5rem;
+            background: transparent;
+            color: #444;
+            border: none;
+            font-size: 1.4rem;
+            padding: 0.25rem;
+            line-height: 1;
+            cursor: pointer;
+        }
+        .modal-close:hover {
+            color: #000;
+        }
+        .modal-actions {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            margin-top: 1rem;
+        }
+        .modal-status {
+            min-height: 1.2rem;
+            font-size: 0.9rem;
+            color: #333;
+            margin-top: 0.5rem;
+        }
+        .modal-status.error {
+            color: #b00020;
+        }
+        body.modal-open {
+            overflow: hidden;
         }
         .hint {
             font-size: 0.9rem;
@@ -110,7 +236,10 @@
     {% endwith %}
 
     <section>
-        <h2>Save Source Documents</h2>
+        <div class="section-header">
+            <h2>Save Source Documents</h2>
+            <button type="button" class="ai-generate-button" id="open-ai-modal">AI Generate Source</button>
+        </div>
         <form method="post" action="{{ url_for('add_source') }}" enctype="multipart/form-data">
             <fieldset>
                 <legend>Details</legend>
@@ -142,7 +271,7 @@
 
     <section>
         <h2>Check Student Document</h2>
-        <form method="post" action="{{ url_for('check_submission') }}" enctype="multipart/form-data">
+        <form id="check-form" method="post" action="{{ url_for('check_submission') }}" enctype="multipart/form-data">
             <fieldset>
                 <legend>Student Submission</legend>
                 <label>
@@ -163,6 +292,9 @@
             <fieldset>
                 <legend>Select Source Documents</legend>
                 {% if source_documents %}
+                    <div class="source-controls">
+                        <button type="button" class="select-all-button" id="select-all-sources">Select All</button>
+                    </div>
                     <div class="source-list">
                         {% for doc in source_documents %}
                             <label>
@@ -183,9 +315,258 @@
                 </label>
                 <p class="hint">Sentences above this cosine similarity will be highlighted in results.</p>
             </fieldset>
-            <button type="submit">Check</button>
+            <div class="submit-controls">
+                <button type="submit" id="check-button">Check</button>
+                <div id="submission-spinner" class="spinner hidden" aria-hidden="true"></div>
+                <div id="processing-bubble" class="processing-bubble hidden" role="status">
+                    Selecting more sources may increase processing time.
+                </div>
+            </div>
         </form>
     </section>
 </main>
+<div id="ai-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="ai-modal-title">
+    <div class="modal">
+        <button type="button" class="modal-close" id="close-ai-modal" aria-label="Close AI generator dialog">&times;</button>
+        <h3 id="ai-modal-title">AI Generate Source</h3>
+        <p class="hint">Provide a topic (and optional title) to draft a new source with the Ollama <code>gpt-oss:latest</code> model.</p>
+        <form id="ai-generate-form">
+            <label>
+                Title (optional)
+                <input type="text" name="title" placeholder="e.g. Impacts of Renewable Energy Adoption">
+            </label>
+            <label>
+                Topic
+                <input type="text" name="topic" placeholder="Describe the topic to cover" required>
+            </label>
+            <div class="modal-status hint" id="ai-modal-status"></div>
+            <div class="modal-actions">
+                <button type="button" class="secondary-button" id="cancel-ai-modal">Cancel</button>
+                <button type="submit" id="ai-submit-button">Generate</button>
+                <div id="ai-modal-spinner" class="spinner hidden" aria-hidden="true"></div>
+            </div>
+        </form>
+    </div>
+</div>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const selectAllButton = document.getElementById('select-all-sources');
+    const checkForm = document.getElementById('check-form');
+    const spinner = document.getElementById('submission-spinner');
+    const processingBubble = document.getElementById('processing-bubble');
+    const checkButton = document.getElementById('check-button');
+
+    function getSourceCheckboxes() {
+        return Array.from(document.querySelectorAll('.source-list input[type="checkbox"]'));
+    }
+
+    function updateSelectAllLabel() {
+        if (!selectAllButton) {
+            return;
+        }
+        const checkboxes = getSourceCheckboxes();
+        if (checkboxes.length === 0) {
+            return;
+        }
+        const allChecked = checkboxes.every(function (checkbox) {
+            return checkbox.checked;
+        });
+        selectAllButton.textContent = allChecked ? 'Clear All' : 'Select All';
+    }
+
+    if (selectAllButton) {
+        selectAllButton.addEventListener('click', function () {
+            const checkboxes = getSourceCheckboxes();
+            if (checkboxes.length === 0) {
+                return;
+            }
+            const allChecked = checkboxes.every(function (checkbox) {
+                return checkbox.checked;
+            });
+            checkboxes.forEach(function (checkbox) {
+                checkbox.checked = !allChecked;
+            });
+            updateSelectAllLabel();
+        });
+
+        document.addEventListener('change', function (event) {
+            if (event.target.matches('.source-list input[type="checkbox"]')) {
+                updateSelectAllLabel();
+            }
+        });
+
+        updateSelectAllLabel();
+    }
+
+    if (checkForm) {
+        checkForm.addEventListener('submit', function () {
+            if (spinner) {
+                spinner.classList.remove('hidden');
+                spinner.setAttribute('aria-hidden', 'false');
+            }
+            if (processingBubble) {
+                processingBubble.classList.remove('hidden');
+            }
+            if (checkButton) {
+                checkButton.disabled = true;
+            }
+        });
+    }
+
+    const openAiModalButton = document.getElementById('open-ai-modal');
+    const aiModal = document.getElementById('ai-modal');
+    const closeAiModalButton = document.getElementById('close-ai-modal');
+    const cancelAiModalButton = document.getElementById('cancel-ai-modal');
+    const aiForm = document.getElementById('ai-generate-form');
+    const aiStatusEl = document.getElementById('ai-modal-status');
+    const aiSpinner = document.getElementById('ai-modal-spinner');
+    const aiSubmitButton = document.getElementById('ai-submit-button');
+
+    function setAiStatus(message, isError) {
+        if (!aiStatusEl) {
+            return;
+        }
+        aiStatusEl.textContent = message || '';
+        if (isError) {
+            aiStatusEl.classList.add('error');
+        } else {
+            aiStatusEl.classList.remove('error');
+        }
+    }
+
+    function openAiModal() {
+        if (!aiModal) {
+            return;
+        }
+        aiModal.classList.remove('hidden');
+        document.body.classList.add('modal-open');
+        setAiStatus('');
+        if (aiForm) {
+            aiForm.reset();
+            const titleInput = aiForm.querySelector('input[name="title"]');
+            if (titleInput) {
+                titleInput.focus();
+            }
+        }
+    }
+
+    function closeAiModal() {
+        if (!aiModal) {
+            return;
+        }
+        aiModal.classList.add('hidden');
+        document.body.classList.remove('modal-open');
+        setAiStatus('');
+        if (aiSpinner) {
+            aiSpinner.classList.add('hidden');
+            aiSpinner.setAttribute('aria-hidden', 'true');
+        }
+        if (aiSubmitButton) {
+            aiSubmitButton.disabled = false;
+        }
+    }
+
+    if (openAiModalButton) {
+        openAiModalButton.addEventListener('click', openAiModal);
+    }
+    if (closeAiModalButton) {
+        closeAiModalButton.addEventListener('click', closeAiModal);
+    }
+    if (cancelAiModalButton) {
+        cancelAiModalButton.addEventListener('click', closeAiModal);
+    }
+    if (aiModal) {
+        aiModal.addEventListener('click', function (event) {
+            if (event.target === aiModal) {
+                closeAiModal();
+            }
+        });
+    }
+    document.addEventListener('keydown', function (event) {
+        if (event.key === 'Escape' && aiModal && !aiModal.classList.contains('hidden')) {
+            closeAiModal();
+        }
+    });
+
+    if (aiForm) {
+        aiForm.addEventListener('submit', async function (event) {
+            event.preventDefault();
+            const titleInput = aiForm.querySelector('input[name="title"]');
+            const topicInput = aiForm.querySelector('input[name="topic"]');
+            const titleValue = titleInput ? titleInput.value.trim() : '';
+            const topicValue = topicInput ? topicInput.value.trim() : '';
+
+            if (!topicValue) {
+                setAiStatus('Topic is required.', true);
+                if (topicInput) {
+                    topicInput.focus();
+                }
+                return;
+            }
+
+            if (aiStatusEl) {
+                setAiStatus('Generating source... this may take a few moments.');
+            }
+            let success = false;
+            if (aiSubmitButton) {
+                aiSubmitButton.disabled = true;
+            }
+            if (aiSpinner) {
+                aiSpinner.classList.remove('hidden');
+                aiSpinner.setAttribute('aria-hidden', 'false');
+            }
+
+            try {
+                const response = await fetch('{{ url_for("generate_source") }}', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        title: titleValue,
+                        topic: topicValue,
+                    }),
+                });
+
+                let payload = {};
+                try {
+                    payload = await response.json();
+                } catch (jsonError) {
+                    payload = {};
+                }
+
+                if (!response.ok) {
+                    const message = payload.error || 'Unable to generate source document.';
+                    throw new Error(message);
+                }
+
+                success = true;
+                setAiStatus('Source generated! Redirecting to your sources...');
+                if (payload.redirect_url) {
+                    setTimeout(function () {
+                        window.location.href = payload.redirect_url;
+                    }, 600);
+                } else {
+                    setTimeout(function () {
+                        closeAiModal();
+                        window.location.reload();
+                    }, 600);
+                }
+            } catch (error) {
+                const message = (error && error.message) ? error.message : 'Unable to generate source document.';
+                setAiStatus(message, true);
+            } finally {
+                if (aiSpinner) {
+                    aiSpinner.classList.add('hidden');
+                    aiSpinner.setAttribute('aria-hidden', 'true');
+                }
+                if (!success && aiSubmitButton) {
+                    aiSubmitButton.disabled = false;
+                }
+            }
+        });
+    }
+});
+</script>
 </body>
 </html>

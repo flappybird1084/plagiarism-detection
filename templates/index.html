@@ -69,6 +69,26 @@
             gap: 0.75rem;
             margin-bottom: 1rem;
         }
+        .ai-controls {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 0.4rem;
+            min-width: 220px;
+        }
+        .ai-controls label {
+            width: 100%;
+            font-size: 0.85rem;
+            color: #333;
+        }
+        .ai-controls input[type="text"] {
+            margin-top: 0.2rem;
+            width: 100%;
+            border: 1px solid #bbb;
+            border-radius: 4px;
+            padding: 0.4rem 0.5rem;
+            font-size: 0.95rem;
+        }
         .source-controls {
             display: flex;
             justify-content: flex-end;
@@ -238,7 +258,12 @@
     <section>
         <div class="section-header">
             <h2>Save Source Documents</h2>
-            <button type="button" class="ai-generate-button" id="open-ai-modal">AI Generate Source</button>
+            <div class="ai-controls">
+                <label for="ollama-url-input">Ollama URL
+                    <input type="text" id="ollama-url-input" name="ollama_url" placeholder="localhost:11434">
+                </label>
+                <button type="button" class="ai-generate-button" id="open-ai-modal">AI Generate Source</button>
+            </div>
         </div>
         <form method="post" action="{{ url_for('add_source') }}" enctype="multipart/form-data">
             <fieldset>
@@ -421,6 +446,58 @@ document.addEventListener('DOMContentLoaded', function () {
     const aiStatusEl = document.getElementById('ai-modal-status');
     const aiSpinner = document.getElementById('ai-modal-spinner');
     const aiSubmitButton = document.getElementById('ai-submit-button');
+    const ollamaUrlInput = document.getElementById('ollama-url-input');
+    const OLLAMA_URL_STORAGE_KEY = 'plagiarism:ollama_url';
+    const DEFAULT_OLLAMA_URL = 'localhost:11434';
+    let storageAvailable = false;
+    try {
+        const testKey = '__ollama_storage_test__';
+        localStorage.setItem(testKey, '1');
+        localStorage.removeItem(testKey);
+        storageAvailable = true;
+    } catch (error) {
+        storageAvailable = false;
+    }
+
+    function persistOllamaUrl(value) {
+        const normalized = value && value.trim() ? value.trim() : DEFAULT_OLLAMA_URL;
+        if (storageAvailable) {
+            try {
+                localStorage.setItem(OLLAMA_URL_STORAGE_KEY, normalized);
+            } catch (error) {
+                // Ignore storage errors.
+            }
+        }
+        if (ollamaUrlInput) {
+            ollamaUrlInput.value = normalized;
+        }
+        return normalized;
+    }
+
+    if (ollamaUrlInput) {
+        let storedUrl = null;
+        if (storageAvailable) {
+            try {
+                storedUrl = localStorage.getItem(OLLAMA_URL_STORAGE_KEY);
+            } catch (error) {
+                storedUrl = null;
+            }
+        }
+        const initialUrl = storedUrl || DEFAULT_OLLAMA_URL;
+        if (!storedUrl && storageAvailable) {
+            try {
+                localStorage.setItem(OLLAMA_URL_STORAGE_KEY, initialUrl);
+            } catch (error) {
+                // Ignore storage errors.
+            }
+        }
+        ollamaUrlInput.value = initialUrl;
+        const syncUrl = function () {
+            persistOllamaUrl(ollamaUrlInput.value);
+        };
+        ollamaUrlInput.addEventListener('change', syncUrl);
+        ollamaUrlInput.addEventListener('blur', syncUrl);
+    }
 
     function setAiStatus(message, isError) {
         if (!aiStatusEl) {
@@ -517,6 +594,7 @@ document.addEventListener('DOMContentLoaded', function () {
             }
 
             try {
+                const baseUrlValue = ollamaUrlInput ? persistOllamaUrl(ollamaUrlInput.value) : '';
                 const response = await fetch('{{ url_for("generate_source") }}', {
                     method: 'POST',
                     headers: {
@@ -525,6 +603,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     body: JSON.stringify({
                         title: titleValue,
                         topic: topicValue,
+                        base_url: baseUrlValue,
                     }),
                 });
 

@@ -180,7 +180,16 @@ def _fetch_url_content(url: str) -> tuple[str, str | None]:
     return stripped, response.url
 
 
-def _generate_source_content(title: str, topic: str) -> str:
+def _normalize_base_url(raw_url: str) -> str:
+    base = raw_url.strip()
+    if not base:
+        return OLLAMA_BASE_URL
+    if not base.startswith(("http://", "https://")):
+        base = f"http://{base}"
+    return base
+
+
+def _generate_source_content(title: str, topic: str, base_url: str | None = None) -> str:
     prompt = (
         "You are generating a detailed reference document that can be used as a source "
         "for plagiarism detection exercises.\n\n"
@@ -195,7 +204,8 @@ def _generate_source_content(title: str, topic: str) -> str:
         "prompt": prompt,
         "stream": False,
     }
-    endpoint = f"{OLLAMA_BASE_URL.rstrip('/')}/api/generate"
+    resolved_base = _normalize_base_url(base_url or OLLAMA_BASE_URL)
+    endpoint = f"{resolved_base.rstrip('/')}/api/generate"
 
     try:
         response = requests.post(endpoint, json=payload, timeout=180)
@@ -325,13 +335,16 @@ def generate_source():
     data = request.get_json(silent=True) or {}
     title = (data.get("title") or "").strip()
     topic = (data.get("topic") or "").strip()
+    base_url = (data.get("base_url") or "").strip()
 
     if not topic:
         return jsonify({"error": "Provide a topic to generate a source document."}), 400
 
     resolved_title = title or f"AI Source: {topic}"
     try:
-        generated_content = _generate_source_content(resolved_title, topic)
+        generated_content = _generate_source_content(
+            resolved_title, topic, base_url=base_url or None
+        )
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 502
 

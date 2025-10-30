@@ -24,6 +24,7 @@ from checker import checked
 from ollama_embeddings import OllamaEmbedder
 
 
+# Create the Flask application and configure extensions.
 app = Flask(__name__)
 app.secret_key = "dev"
 app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///plagiarism.db"
@@ -31,6 +32,7 @@ app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
 db = SQLAlchemy(app)
 
+# Default Ollama endpoints used when generating or embedding text.
 OLLAMA_BASE_URL = "http://localhost:11434"
 OLLAMA_GENERATE_MODEL = "gpt-oss:latest"
 
@@ -62,6 +64,7 @@ def _decode_upload(upload) -> str:
 def _fetch_selected_sources(selected_ids: Iterable[int]) -> List[Document]:
     if not selected_ids:
         return []
+    # Query the database for the chosen source documents in reverse chronological order.
     return (
         Document.query.filter(Document.id.in_(selected_ids), Document.is_source.is_(True))
         .order_by(Document.created_at.desc())
@@ -101,6 +104,7 @@ class _HTMLTextExtractor(HTMLParser):
     def handle_starttag(self, tag: str, attrs) -> None:
         lowered = tag.lower()
         if lowered in {"script", "style"}:
+            # Suppress scripted content by tracking nested script/style depth.
             self._skip_depth += 1
             return
         if lowered == "title":
@@ -153,6 +157,7 @@ def _normalize_url(raw_url: str) -> str:
 
 
 def _fetch_url_content(url: str) -> tuple[str, str | None]:
+    # Retrieve the URL and normalize any HTML payload into plain text snippets.
     try:
         response = requests.get(url, timeout=10)
     except requests.RequestException as exc:
@@ -209,6 +214,7 @@ def _generate_source_content(title: str, topic: str, base_url: str | None = None
     endpoint = f"{resolved_base.rstrip('/')}/api/generate"
 
     try:
+        # Ask Ollama to synthesize a reference article covering the requested topic.
         response = requests.post(endpoint, json=payload, timeout=180)
     except requests.RequestException as exc:
         raise ValueError(f"Ollama request failed: {exc}") from exc
@@ -417,6 +423,7 @@ def check_submission():
         {"id": doc.id, "title": doc.title, "content": doc.content}
         for doc in selected_sources
     ]
+    # Run the similarity analysis against the chosen sources and pre-compute highlights.
     analysis = checked.analyze(student_content, [doc["content"] for doc in source_payload])
     per_source_scores = checked.per_source_scores(
         student_content, [doc["content"] for doc in source_payload]

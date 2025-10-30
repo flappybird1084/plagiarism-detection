@@ -26,6 +26,7 @@ class OllamaEmbedder:
     def embed_batch(self, texts: Sequence[str]) -> List[List[float]]:
         embeddings: List[List[float]] = []
         endpoint = f"{self.base_url.rstrip('/')}/api/embeddings"
+        # Request embeddings for each text sequentially to keep error handling explicit.
         for text in texts:
             payload = {"model": self.model, "prompt": text}
             try:

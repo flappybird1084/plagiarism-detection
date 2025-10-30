@@ -13,6 +13,7 @@ from ollama_embeddings import OllamaEmbedder, OllamaEmbeddingError
 class Checked:
     """Compute plagiarism scores for a student submission against provided sources."""
 
+    # Precompiled patterns keep sentence, paragraph, and token boundaries consistent.
     sentence_splitter = re.compile(r"(?<=[.!?])\s+")
     paragraph_splitter = re.compile(r"\n\s*\n+")
     token_pattern = re.compile(r"\b\w+\b", re.UNICODE)
@@ -72,6 +73,7 @@ class Checked:
         source_sentences = list(
             chain.from_iterable(self._split_sentences(text) for text in source_contents)
         )
+        # Evaluate similarity at both sentence and paragraph granularity for richer scoring.
         student_paragraphs = self._split_paragraphs(student_content)
         paragraph_tfidf_scores: List[float] = []
         paragraph_embedding_scores: List[float] = []
@@ -202,4 +204,5 @@ class Checked:
         return float(sum(filtered) / len(filtered))
 
 
+# Shared instance used by the Flask app for handling plagiarism checks.
 checked = Checked()

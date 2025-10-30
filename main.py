@@ -21,6 +21,7 @@ from urllib.parse import urlparse
 import requests
 
 from checker import checked
+from ollama_embeddings import OllamaEmbedder
 
 
 app = Flask(__name__)
@@ -383,6 +384,7 @@ def check_submission():
     student_title = request.form.get("student_title", "").strip()
     student_text = request.form.get("student_text", "").strip()
     student_upload = request.files.get("student_file")
+    base_url_input = request.form.get("ollama_base_url", "").strip()
 
     student_content = ""
     if student_upload and student_upload.filename:
@@ -407,6 +409,9 @@ def check_submission():
     )
     db.session.add(student_document)
     db.session.commit()
+
+    resolved_base_url = _normalize_base_url(base_url_input or OLLAMA_BASE_URL)
+    checked.embedder = OllamaEmbedder(base_url=resolved_base_url)
 
     source_payload = [
         {"id": doc.id, "title": doc.title, "content": doc.content}

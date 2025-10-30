@@ -74,20 +74,23 @@
             flex-direction: column;
             align-items: flex-end;
             gap: 0.4rem;
-            min-width: 220px;
+            min-width: 260px;
         }
         .ai-controls label {
             width: 100%;
             font-size: 0.85rem;
             color: #333;
         }
-        .ai-controls input[type="text"] {
+        .ai-controls label input[type="text"] {
             margin-top: 0.2rem;
             width: 100%;
             border: 1px solid #bbb;
             border-radius: 4px;
             padding: 0.4rem 0.5rem;
             font-size: 0.95rem;
+        }
+        .ai-controls button {
+            align-self: flex-end;
         }
         .source-controls {
             display: flex;
@@ -259,8 +262,11 @@
         <div class="section-header">
             <h2>Save Source Documents</h2>
             <div class="ai-controls">
-                <label for="ollama-url-input">Ollama URL
-                    <input type="text" id="ollama-url-input" name="ollama_url" placeholder="localhost:11434">
+                <label for="ollama-generation-url-input">AI Generation URL
+                    <input type="text" id="ollama-generation-url-input" name="ollama_generation_url" placeholder="localhost:11434">
+                </label>
+                <label for="ollama-embedding-url-input">Embedding URL
+                    <input type="text" id="ollama-embedding-url-input" name="ollama_embedding_url" placeholder="localhost:11434">
                 </label>
                 <button type="button" class="ai-generate-button" id="open-ai-modal">AI Generate Source</button>
             </div>
@@ -332,6 +338,7 @@
                     <p class="hint">No source documents saved yet.</p>
                 {% endif %}
             </fieldset>
+            <input type="hidden" name="ollama_base_url" id="ollama-base-url-hidden">
             <fieldset>
                 <legend>Detection Settings</legend>
                 <label>
@@ -380,6 +387,17 @@ document.addEventListener('DOMContentLoaded', function () {
     const spinner = document.getElementById('submission-spinner');
     const processingBubble = document.getElementById('processing-bubble');
     const checkButton = document.getElementById('check-button');
+    const openAiModalButton = document.getElementById('open-ai-modal');
+    const aiModal = document.getElementById('ai-modal');
+    const closeAiModalButton = document.getElementById('close-ai-modal');
+    const cancelAiModalButton = document.getElementById('cancel-ai-modal');
+    const aiForm = document.getElementById('ai-generate-form');
+    const aiStatusEl = document.getElementById('ai-modal-status');
+    const aiSpinner = document.getElementById('ai-modal-spinner');
+    const aiSubmitButton = document.getElementById('ai-submit-button');
+    const generationUrlInput = document.getElementById('ollama-generation-url-input');
+    const embeddingUrlInput = document.getElementById('ollama-embedding-url-input');
+    const embeddingHiddenInput = document.getElementById('ollama-base-url-hidden');
 
     function getSourceCheckboxes() {
         return Array.from(document.querySelectorAll('.source-list input[type="checkbox"]'));
@@ -425,6 +443,17 @@ document.addEventListener('DOMContentLoaded', function () {
 
     if (checkForm) {
         checkForm.addEventListener('submit', function () {
+            const normalizedBase = embeddingUrlInput
+                ? persistEmbeddingUrl(embeddingUrlInput.value)
+                : persistEmbeddingUrl(
+                    (embeddingHiddenInput && embeddingHiddenInput.value) ||
+                    getStoredValue(EMBEDDING_STORAGE_KEY) ||
+                    getStoredValue(LEGACY_URL_STORAGE_KEY) ||
+                    DEFAULT_EMBEDDING_URL
+                );
+            if (embeddingHiddenInput) {
+                embeddingHiddenInput.value = normalizedBase;
+            }
             if (spinner) {
                 spinner.classList.remove('hidden');
                 spinner.setAttribute('aria-hidden', 'false');
@@ -438,17 +467,11 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
-    const openAiModalButton = document.getElementById('open-ai-modal');
-    const aiModal = document.getElementById('ai-modal');
-    const closeAiModalButton = document.getElementById('close-ai-modal');
-    const cancelAiModalButton = document.getElementById('cancel-ai-modal');
-    const aiForm = document.getElementById('ai-generate-form');
-    const aiStatusEl = document.getElementById('ai-modal-status');
-    const aiSpinner = document.getElementById('ai-modal-spinner');
-    const aiSubmitButton = document.getElementById('ai-submit-button');
-    const ollamaUrlInput = document.getElementById('ollama-url-input');
-    const OLLAMA_URL_STORAGE_KEY = 'plagiarism:ollama_url';
-    const DEFAULT_OLLAMA_URL = 'localhost:11434';
+    const EMBEDDING_STORAGE_KEY = 'plagiarism:ollama_url_embedding';
+    const GENERATION_STORAGE_KEY = 'plagiarism:ollama_url_generation';
+    const LEGACY_URL_STORAGE_KEY = 'plagiarism:ollama_url';
+    const DEFAULT_EMBEDDING_URL = 'localhost:11434';
+    const DEFAULT_GENERATION_URL = 'localhost:11434';
     let storageAvailable = false;
     try {
         const testKey = '__ollama_storage_test__';
@@ -459,44 +482,81 @@ document.addEventListener('DOMContentLoaded', function () {
         storageAvailable = false;
     }
 
-    function persistOllamaUrl(value) {
-        const normalized = value && value.trim() ? value.trim() : DEFAULT_OLLAMA_URL;
+    function getStoredValue(storageKey) {
+        if (!storageAvailable) {
+            return null;
+        }
+        try {
+            return localStorage.getItem(storageKey);
+        } catch (error) {
+            return null;
+        }
+    }
+
+    function persistEmbeddingUrl(value) {
+        const normalized = value && value.trim() ? value.trim() : DEFAULT_EMBEDDING_URL;
         if (storageAvailable) {
             try {
-                localStorage.setItem(OLLAMA_URL_STORAGE_KEY, normalized);
+                localStorage.setItem(EMBEDDING_STORAGE_KEY, normalized);
+                localStorage.removeItem(LEGACY_URL_STORAGE_KEY);
             } catch (error) {
                 // Ignore storage errors.
             }
         }
-        if (ollamaUrlInput) {
-            ollamaUrlInput.value = normalized;
+        if (embeddingUrlInput) {
+            embeddingUrlInput.value = normalized;
+        }
+        if (embeddingHiddenInput) {
+            embeddingHiddenInput.value = normalized;
         }
         return normalized;
     }
 
-    if (ollamaUrlInput) {
-        let storedUrl = null;
+    function persistGenerationUrl(value) {
+        const normalized = value && value.trim() ? value.trim() : DEFAULT_GENERATION_URL;
         if (storageAvailable) {
             try {
-                storedUrl = localStorage.getItem(OLLAMA_URL_STORAGE_KEY);
-            } catch (error) {
-                storedUrl = null;
-            }
-        }
-        const initialUrl = storedUrl || DEFAULT_OLLAMA_URL;
-        if (!storedUrl && storageAvailable) {
-            try {
-                localStorage.setItem(OLLAMA_URL_STORAGE_KEY, initialUrl);
+                localStorage.setItem(GENERATION_STORAGE_KEY, normalized);
+                localStorage.removeItem(LEGACY_URL_STORAGE_KEY);
             } catch (error) {
                 // Ignore storage errors.
             }
         }
-        ollamaUrlInput.value = initialUrl;
-        const syncUrl = function () {
-            persistOllamaUrl(ollamaUrlInput.value);
+        if (generationUrlInput) {
+            generationUrlInput.value = normalized;
+        }
+        return normalized;
+    }
+
+    if (embeddingUrlInput) {
+        const storedEmbedding =
+            getStoredValue(EMBEDDING_STORAGE_KEY) || getStoredValue(LEGACY_URL_STORAGE_KEY);
+        persistEmbeddingUrl(storedEmbedding || DEFAULT_EMBEDDING_URL);
+        const syncEmbedding = function () {
+            persistEmbeddingUrl(embeddingUrlInput.value);
         };
-        ollamaUrlInput.addEventListener('change', syncUrl);
-        ollamaUrlInput.addEventListener('blur', syncUrl);
+        embeddingUrlInput.addEventListener('change', syncEmbedding);
+        embeddingUrlInput.addEventListener('blur', syncEmbedding);
+    } else if (embeddingHiddenInput) {
+        const storedEmbedding =
+            getStoredValue(EMBEDDING_STORAGE_KEY) || getStoredValue(LEGACY_URL_STORAGE_KEY);
+        const currentValue = embeddingHiddenInput.value || storedEmbedding || DEFAULT_EMBEDDING_URL;
+        persistEmbeddingUrl(currentValue);
+    }
+
+    if (generationUrlInput) {
+        const storedGeneration =
+            getStoredValue(GENERATION_STORAGE_KEY) || getStoredValue(LEGACY_URL_STORAGE_KEY);
+        persistGenerationUrl(storedGeneration || DEFAULT_GENERATION_URL);
+        const syncGeneration = function () {
+            persistGenerationUrl(generationUrlInput.value);
+        };
+        generationUrlInput.addEventListener('change', syncGeneration);
+        generationUrlInput.addEventListener('blur', syncGeneration);
+    } else {
+        const storedGeneration =
+            getStoredValue(GENERATION_STORAGE_KEY) || getStoredValue(LEGACY_URL_STORAGE_KEY);
+        persistGenerationUrl(storedGeneration || DEFAULT_GENERATION_URL);
     }
 
     function setAiStatus(message, isError) {
@@ -594,7 +654,14 @@ document.addEventListener('DOMContentLoaded', function () {
             }
 
             try {
-                const baseUrlValue = ollamaUrlInput ? persistOllamaUrl(ollamaUrlInput.value) : '';
+                const generationRaw = generationUrlInput
+                    ? generationUrlInput.value
+                    : (
+                        getStoredValue(GENERATION_STORAGE_KEY) ||
+                        getStoredValue(LEGACY_URL_STORAGE_KEY) ||
+                        DEFAULT_GENERATION_URL
+                    );
+                const baseUrlValue = persistGenerationUrl(generationRaw);
                 const response = await fetch('{{ url_for("generate_source") }}', {
                     method: 'POST',
                     headers: {
